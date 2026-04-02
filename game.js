@@ -380,7 +380,7 @@ function activatePower() {
 
   state.powerCharge = 0;
   state.powerReady = false;
-  state.powerCooldown = 3; // 3s before recharge starts
+  state.powerCooldown = 1; // 1s before recharge starts
 
   if (power.id === 'pigfart') {
     // PUSH all enemies to edges + small damage + funny cloud
@@ -476,7 +476,7 @@ let state = {
   // Special powers
   powers: [],          // list of unlocked power ids
   powerCharge: 0,      // 0-100
-  powerChargeRate: 4,  // charge per second
+  powerChargeRate: 40, // charge per second (~2.5s full charge)
   powerReady: false,
   powerCooldown: 0,    // time after use before recharge starts
 };
