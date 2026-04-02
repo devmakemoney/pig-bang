@@ -3246,6 +3246,20 @@ function devGoToWave(wave) {
   const zone = getZone();
   buildZone(zone.id);
 
+  // Unlock all powers available at this wave
+  state.powers = [];
+  state.powerCharge = 0;
+  state.powerReady = false;
+  state.powerCooldown = 0;
+  POWERS.forEach(p => {
+    if (p.unlockedAtWave <= wave) {
+      state.powers.push(p.id);
+      state.powerCharge = 100;
+      state.powerReady = true;
+    }
+  });
+  updatePowerUI();
+
   const w = getWeapon();
   weaponNameEl.textContent = w.name;
   weaponNameEl.style.color = w.color;
