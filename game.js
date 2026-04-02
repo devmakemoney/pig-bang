@@ -443,8 +443,48 @@ function buildBarn() {
   arenaGroup.add(floor);
 
   const wallMat = new THREE.MeshLambertMaterial({ color: 0x6B3A2A });
+
+  // Back wall (negative Z) - with door opening in the middle
+  const doorWidth = 3.5;
+  const sideW = (W - doorWidth) / 2;
+  // Left section
+  const wallBackL = new THREE.Mesh(new THREE.BoxGeometry(sideW, WALL_H, 0.5), wallMat);
+  wallBackL.position.set(-(doorWidth / 2 + sideW / 2), WALL_H / 2, -D / 2);
+  wallBackL.castShadow = true; wallBackL.receiveShadow = true;
+  arenaGroup.add(wallBackL);
+  // Right section
+  const wallBackR = new THREE.Mesh(new THREE.BoxGeometry(sideW, WALL_H, 0.5), wallMat);
+  wallBackR.position.set((doorWidth / 2 + sideW / 2), WALL_H / 2, -D / 2);
+  wallBackR.castShadow = true; wallBackR.receiveShadow = true;
+  arenaGroup.add(wallBackR);
+  // Door frame top
+  const doorTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.4, 0.4, 0.5), wallMat);
+  doorTop.position.set(0, WALL_H - 0.2, -D / 2);
+  arenaGroup.add(doorTop);
+
+  // Double barn doors (can be opened during cinematic)
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x8B5A2B });
+  const doorL = new THREE.Mesh(new THREE.BoxGeometry(doorWidth / 2, WALL_H - 0.5, 0.2), doorMat);
+  doorL.position.set(-doorWidth / 4, (WALL_H - 0.5) / 2, -D / 2);
+  doorL.userData.isDoor = true;
+  doorL.userData.side = -1;
+  arenaGroup.add(doorL);
+  const doorR = new THREE.Mesh(new THREE.BoxGeometry(doorWidth / 2, WALL_H - 0.5, 0.2), doorMat);
+  doorR.position.set(doorWidth / 4, (WALL_H - 0.5) / 2, -D / 2);
+  doorR.userData.isDoor = true;
+  doorR.userData.side = 1;
+  arenaGroup.add(doorR);
+
+  // Door handles
+  const handleMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+  [-1, 1].forEach(side => {
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.1), handleMat);
+    handle.position.set(side * doorWidth / 4 + side * -0.6, WALL_H / 2 - 0.5, -D / 2 + 0.15);
+    arenaGroup.add(handle);
+  });
+
+  // Other 3 walls (solid)
   [
-    { w: W, pos: [0, WALL_H / 2, -D / 2], rot: 0 },
     { w: W, pos: [0, WALL_H / 2, D / 2], rot: 0 },
     { w: D, pos: [-W / 2, WALL_H / 2, 0], rot: Math.PI / 2 },
     { w: D, pos: [W / 2, WALL_H / 2, 0], rot: Math.PI / 2 },
@@ -644,10 +684,27 @@ function startCinematic(fromZoneId, toZoneId, callback) {
   }
   scene.add(cinematicForestGroup);
 
-  // Place pig at center of barn, facing the forest (negative Z)
+  // Place pig at center of barn, facing the camera
   pig.position.set(0, 0, 0);
-  pig.rotation.y = Math.PI; // face the camera initially
+  pig.rotation.y = Math.PI;
   pigVel.set(0, 0, 0);
+}
+
+function animateBarnDoors(openAmount) {
+  // Find door meshes in arenaGroup
+  arenaGroup.traverse(obj => {
+    if (obj.userData && obj.userData.isDoor) {
+      const side = obj.userData.side; // -1 = left, 1 = right
+      // Doors swing open outward (rotate around their edge)
+      const doorHalfW = 3.5 / 4;
+      const baseX = side * doorHalfW;
+      const pivotX = side * (doorHalfW * 2);
+      const angle = openAmount * Math.PI * 0.45 * side;
+      obj.position.x = pivotX - Math.cos(angle) * doorHalfW * side;
+      obj.position.z = -arenaD / 2 - Math.sin(Math.abs(angle)) * doorHalfW;
+      obj.rotation.y = angle;
+    }
+  });
 }
 
 function updateCinematic(dt) {
@@ -666,20 +723,23 @@ function updateCinematic(dt) {
     hg.userData.armR.rotation.x = Math.sin(runPhase + Math.PI) * 0.3;
   }
 
-  // Phase 0 (0-0.25): Close-up on pig's face, he looks happy/determined
+  // Phase 0 (0-0.25): Close-up on pig's face, doors start opening
   if (t < 0.25) {
     const p = t / 0.25;
     pig.rotation.y = Math.PI; // facing camera
-    // Camera in front of pig, close up, slowly pulling back
     const camDist = 2.5 + p * 1;
     camera.position.lerp(new THREE.Vector3(0, 1.8, camDist), dt * 6);
     camera.lookAt(pig.position.x, 1.3, pig.position.z);
+    // Doors creak open behind him
+    animateBarnDoors(p * 0.3);
   }
-  // Phase 1 (0.25-0.5): Camera swings behind pig, pig turns and starts walking toward forest
+  // Phase 1 (0.25-0.5): Camera swings behind pig, pig turns, doors fully open
   else if (t < 0.5) {
     const p = (t - 0.25) / 0.25;
     // Pig rotates to face the forest (negative Z direction = rotation 0)
     pig.rotation.y = Math.PI * (1 - p);
+    // Doors swing fully open
+    animateBarnDoors(0.3 + p * 0.7);
     // Camera swings behind
     const angle = Math.PI * (1 - p);
     const camDist = 4 + p * 4;
@@ -996,9 +1056,9 @@ function spawnFarmer() {
   if (zone.id === 'forest') {
     // Pick random forest enemy
     const roll = Math.random();
-    if (roll < 0.4) createHunter(pos);
-    else if (roll < 0.75) createDog(pos);
-    else createBearEnemy(pos);
+    if (roll < 0.55) createHunter(pos);       // 55% hunters
+    else if (roll < 0.8) createDog(pos);       // 25% dogs
+    else createBearEnemy(pos);                  // 20% bears
   } else {
     createFarmer(pos);
   }
