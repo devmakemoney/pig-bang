@@ -349,6 +349,112 @@ function getWeapon() {
   return WEAPONS[idx];
 }
 
+// ============================================================
+// SPECIAL POWERS - Unlocked by beating bosses
+// ============================================================
+const POWERS = [
+  {
+    id: 'pigfart', name: 'PIG FART', emoji: '\u{1F4A8}',
+    desc: 'Blast all enemies to the edges!',
+    color: '#88cc00', unlockedAtWave: 6,
+  },
+  {
+    id: 'warcry', name: 'WAR CRY', emoji: '\u{1F4E2}',
+    desc: 'Petrify all enemies for 3s!',
+    color: '#ff8800', unlockedAtWave: 11,
+  },
+];
+
+function getActivePower() {
+  // Return the latest unlocked power
+  for (let i = POWERS.length - 1; i >= 0; i--) {
+    if (state.powers.includes(POWERS[i].id)) return POWERS[i];
+  }
+  return null;
+}
+
+function activatePower() {
+  if (state.powerCharge < 100 || !state.alive) return;
+  const power = getActivePower();
+  if (!power) return;
+
+  state.powerCharge = 0;
+  state.powerReady = false;
+  state.powerCooldown = 3; // 3s before recharge starts
+
+  if (power.id === 'pigfart') {
+    // PUSH all enemies to edges + small damage + funny cloud
+    playSound('boom');
+    shakeAmount = 0.8;
+
+    // Green stink cloud particles
+    for (let i = 0; i < 30; i++) {
+      const angle = (i / 30) * Math.PI * 2;
+      const speed = 8 + Math.random() * 4;
+      const p = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3 + Math.random() * 0.3, 6, 6),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(0.25 + Math.random() * 0.1, 0.8, 0.4), transparent: true, opacity: 0.7 })
+      );
+      p.position.copy(pig.position);
+      p.position.y += 0.8;
+      p.userData = {
+        vel: new THREE.Vector3(Math.cos(angle) * speed, 1 + Math.random() * 2, Math.sin(angle) * speed),
+        life: 1.2 + Math.random() * 0.5,
+      };
+      scene.add(p);
+      particles.push(p);
+    }
+
+    // Push all farmers to edges
+    farmers.forEach(f => {
+      const dir = new THREE.Vector3().subVectors(f.position, pig.position).setY(0);
+      const dist = dir.length();
+      if (dist < 0.1) dir.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+      dir.normalize();
+      // Strong push to edges
+      const pushForce = 30;
+      f.userData.knockback.add(dir.multiplyScalar(pushForce));
+      // Small damage
+      f.userData.health -= 1;
+      if (f.userData.health <= 0) {
+        spawnFarmerDeath(f.position);
+        playSound('death');
+        const wasBoss = f.userData.isBoss;
+        if (wasBoss) { boss = null; bossBarContainer.style.display = 'none'; state.score += 100 * state.wave; }
+        else { state.score += 10 * state.wave; }
+        scene.remove(f);
+        farmers.splice(farmers.indexOf(f), 1);
+        scoreEl.textContent = `Score: ${state.score}`;
+      }
+    });
+
+    // Show power name
+    waveAnnounce.innerHTML = `<div class="wave-num" style="font-size:40px;color:#88cc00">PIG FART!</div>`;
+    waveAnnounce.style.display = 'block';
+    setTimeout(() => { waveAnnounce.style.display = 'none'; }, 1000);
+  }
+  else if (power.id === 'warcry') {
+    // Freeze all enemies for 3 seconds
+    playSound('zap');
+    shakeAmount = 0.5;
+    farmers.forEach(f => {
+      f.userData.frozen = 3.0;
+      f.userData.frozenSlow = 0;
+      f.children.forEach(c => {
+        if (c.material && c.material.emissive) {
+          c.material.emissive.setHex(0xff8800);
+          c.material.emissiveIntensity = 0.6;
+        }
+      });
+    });
+    waveAnnounce.innerHTML = `<div class="wave-num" style="font-size:40px;color:#ff8800">WAR CRY!</div>`;
+    waveAnnounce.style.display = 'block';
+    setTimeout(() => { waveAnnounce.style.display = 'none'; }, 1000);
+  }
+
+  updatePowerUI();
+}
+
 // --- Game state ---
 const MAX_LIVES = 3;
 
@@ -367,6 +473,12 @@ let state = {
   waveActive: false,
   mouseDown: false,
   checkpoint: 1,
+  // Special powers
+  powers: [],          // list of unlocked power ids
+  powerCharge: 0,      // 0-100
+  powerChargeRate: 4,  // charge per second
+  powerReady: false,
+  powerCooldown: 0,    // time after use before recharge starts
 };
 
 const mouse = new THREE.Vector2();
@@ -396,6 +508,29 @@ const bossFill = document.getElementById('boss-fill');
 const bossNameEl = document.getElementById('boss-name');
 const weaponNameEl = document.getElementById('weapon-name');
 const weaponDescEl = document.getElementById('weapon-desc');
+const powerContainer = document.getElementById('power-container');
+const powerFill = document.getElementById('power-fill');
+const powerKeyEl = document.getElementById('power-key');
+const powerNameEl = document.getElementById('power-name');
+
+function updatePowerUI() {
+  const power = getActivePower();
+  if (!power) {
+    powerContainer.style.display = 'none';
+    return;
+  }
+  powerContainer.style.display = 'flex';
+  powerFill.style.width = state.powerCharge + '%';
+  powerFill.style.background = power.color;
+  powerNameEl.textContent = power.name;
+  if (state.powerCharge >= 100) {
+    powerKeyEl.classList.add('ready');
+    powerKeyEl.textContent = 'E';
+  } else {
+    powerKeyEl.classList.remove('ready');
+    powerKeyEl.textContent = 'E';
+  }
+}
 
 // ============================================================
 // ZONE BUILDERS
@@ -2270,6 +2405,20 @@ function update() {
 
   state.shootTimer = Math.max(0, state.shootTimer - dt);
 
+  // Power charge
+  if (getActivePower()) {
+    if (state.powerCooldown > 0) {
+      state.powerCooldown -= dt;
+    } else if (state.powerCharge < 100) {
+      state.powerCharge = Math.min(100, state.powerCharge + state.powerChargeRate * dt);
+      if (state.powerCharge >= 100 && !state.powerReady) {
+        state.powerReady = true;
+        playSound('pew');
+      }
+    }
+    updatePowerUI();
+  }
+
   // --- Wave logic ---
   if (!state.waveActive) {
     state.waveTimer += dt;
@@ -2295,11 +2444,30 @@ function update() {
       state.health = MAX_HEALTH;
       healthFill.style.width = '100%';
 
-      // Boss defeated: +1 life + checkpoint + zone transition
+      // Boss defeated: +1 life + checkpoint + unlock power + zone transition
       if (isBossWave(justFinished)) {
         state.lives = Math.min(state.lives + 1, 5);
         updateLivesDisplay();
         state.checkpoint = state.wave;
+
+        // Unlock power if available
+        const newPower = POWERS.find(p => p.unlockedAtWave === state.wave && !state.powers.includes(p.id));
+        if (newPower) {
+          state.powers.push(newPower.id);
+          state.powerCharge = 100; // Start fully charged
+          state.powerReady = true;
+          // Announce
+          setTimeout(() => {
+            waveAnnounce.innerHTML = `
+              <div class="wave-num" style="font-size:32px;color:${newPower.color}">POWER UNLOCKED!</div>
+              <div class="weapon-unlock" style="color:${newPower.color}">${newPower.emoji} ${newPower.name}</div>
+              <div style="font-size:16px;color:#aaa;margin-top:5px">${newPower.desc}<br>Press E to use!</div>
+            `;
+            waveAnnounce.style.display = 'block';
+            setTimeout(() => { waveAnnounce.style.display = 'none'; }, 3000);
+          }, 500);
+          updatePowerUI();
+        }
 
         // Check if next wave is a new zone
         const prevZoneIdx = getZoneIndex();
@@ -2987,6 +3155,20 @@ function restartGame() {
   state.waveActive = false;
   state.checkpoint = checkpoint > 1 ? checkpoint : 1;
 
+  // Restore powers based on checkpoint
+  state.powers = [];
+  state.powerCharge = 0;
+  state.powerReady = false;
+  state.powerCooldown = 0;
+  POWERS.forEach(p => {
+    if (p.unlockedAtWave <= checkpoint) {
+      state.powers.push(p.id);
+      state.powerCharge = 100;
+      state.powerReady = true;
+    }
+  });
+  updatePowerUI();
+
   // Build correct zone for checkpoint
   const zone = getZone();
   buildZone(zone.id);
@@ -3008,8 +3190,12 @@ function restartGame() {
 }
 
 // ============================================================
-// INPUT - Mouse only, no WASD
+// INPUT - Mouse + E key for power
 // ============================================================
+window.addEventListener('keydown', e => {
+  if (e.code === 'KeyE') activatePower();
+});
+
 window.addEventListener('mousemove', e => {
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
