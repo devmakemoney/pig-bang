@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chicken Gun - Beatmaker</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e; color: #eee;
+    font-family: 'Courier New', monospace;
+    padding: 20px; min-height: 100vh;
+  }
+  h1 { text-align: center; color: #ff0; margin-bottom: 5px; font-size: 28px; }
+  .subtitle { text-align: center; color: #888; margin-bottom: 20px; font-size: 13px; }
+
+  .top-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 15px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .top-bar label { font-size: 14px; color: #aaa; }
+  .top-bar select, .top-bar input[type=range] { cursor: pointer; }
+  .top-bar select {
+    background: #2a2a4a; color: #fff; border: 1px solid #555;
+    padding: 6px 10px; border-radius: 4px; font-family: inherit; font-size: 14px;
+  }
+  .bpm-display {
+    background: #2a2a4a; border: 1px solid #555; border-radius: 4px;
+    padding: 6px 12px; font-size: 16px; font-weight: bold; color: #0f0;
+    min-width: 70px; text-align: center;
+  }
+  input[type=range] {
+    -webkit-appearance: none; background: #333; height: 6px;
+    border-radius: 3px; outline: none; width: 120px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 16px; height: 16px;
+    background: #0f0; border-radius: 50%; cursor: pointer;
+  }
+
+  .btn {
+    padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer;
+    font-family: inherit; font-size: 14px; font-weight: bold;
+    transition: transform 0.1s, filter 0.1s;
+  }
+  .btn:hover { filter: brightness(1.2); }
+  .btn:active { transform: scale(0.95); }
+  .btn-play { background: #0a0; color: #fff; }
+  .btn-play.playing { background: #a00; }
+  .btn-stop { background: #555; color: #fff; }
+  .btn-copy { background: #36a; color: #fff; }
+  .btn-clear { background: #633; color: #fff; }
+  .btn-export { background: #a60; color: #fff; font-size: 16px; padding: 10px 24px; }
+
+  .grid-container {
+    overflow-x: auto; margin-bottom: 20px;
+    border: 2px solid #333; border-radius: 8px; background: #16162a;
+  }
+  .grid-table { border-collapse: collapse; width: 100%; }
+  .grid-table th {
+    padding: 6px 8px; text-align: right; font-size: 12px;
+    color: #999; white-space: nowrap; position: sticky; left: 0;
+    background: #16162a; z-index: 2; min-width: 100px;
+  }
+  .grid-table th .inst-color {
+    display: inline-block; width: 10px; height: 10px;
+    border-radius: 50%; margin-right: 6px; vertical-align: middle;
+  }
+  .grid-table td {
+    padding: 2px; text-align: center;
+  }
+  .cell {
+    width: 36px; height: 32px; border-radius: 4px; cursor: pointer;
+    border: 1px solid #2a2a4a; transition: background 0.1s, transform 0.05s;
+  }
+  .cell:hover { border-color: #666; transform: scale(1.1); }
+  .cell.on { border-color: transparent; }
+  .cell.beat-marker { border-bottom: 2px solid #444; }
+  .cell.playhead { box-shadow: inset 0 0 0 2px #fff; }
+
+  /* Instrument colors */
+  .cell.on.kick { background: #e53; }
+  .cell.on.snare { background: #f90; }
+  .cell.on.hihat { background: #0cf; }
+  .cell.on.open-hat { background: #08f; }
+  .cell.on.crash { background: #ff0; }
+  .cell.on.ride { background: #af0; }
+  .cell.on.sub { background: #c0f; }
+  .cell.on.reese { background: #f0a; }
+  .cell.on.strings { background: #d8a; }
+  .cell.on.bell { background: #8df; }
+
+  .cell:not(.on) { background: #1e1e38; }
+  /* Beat markers (every 4) */
+  .cell.beat-start:not(.on) { background: #252545; }
+
+  .step-nums td {
+    font-size: 10px; color: #555; text-align: center; padding: 2px;
+  }
+  .step-nums td.beat-one { color: #888; font-weight: bold; }
+
+  .bottom-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 15px; margin-top: 15px; flex-wrap: wrap;
+  }
+
+  .export-area {
+    margin-top: 20px; text-align: center;
+  }
+  .export-area textarea {
+    width: 100%; max-width: 700px; height: 120px; background: #0a0a1a;
+    color: #0f0; border: 1px solid #333; border-radius: 6px;
+    font-family: 'Courier New', monospace; font-size: 12px;
+    padding: 10px; resize: vertical;
+  }
+  .export-status {
+    margin-top: 8px; font-size: 13px; color: #0f0;
+    min-height: 20px;
+  }
+
+  .instructions {
+    max-width: 700px; margin: 20px auto 0; padding: 15px;
+    background: #1e1e38; border-radius: 8px; border: 1px solid #333;
+    font-size: 13px; color: #999; line-height: 1.6;
+  }
+  .instructions strong { color: #ff0; }
+</style>
+</head>
+<body>
+
+<h1>CHICKEN GUN BEATMAKER</h1>
+<p class="subtitle">Compose tes 10 patterns DnB - un par vague</p>
+
+<div class="top-bar">
+  <label>Wave:</label>
+  <select id="wave-select"></select>
+  <label>BPM:</label>
+  <input type="range" id="bpm-slider" min="140" max="200" value="174">
+  <div class="bpm-display" id="bpm-display">174</div>
+  <button class="btn btn-play" id="btn-play" onclick="togglePlay()">PLAY</button>
+  <button class="btn btn-stop" onclick="stopPlay()">STOP</button>
+</div>
+
+<div class="grid-container">
+  <table class="grid-table" id="grid"></table>
+</div>
+
+<div class="bottom-bar">
+  <button class="btn btn-copy" onclick="copyToAll()">Copy to all waves</button>
+  <button class="btn btn-copy" onclick="copyToNext()">Copy to next wave</button>
+  <button class="btn btn-clear" onclick="clearPattern()">Clear pattern</button>
+  <label style="color:#aaa; font-size:13px;">Swing:</label>
+  <input type="range" id="swing-slider" min="0" max="80" value="0" style="width:80px;">
+  <span id="swing-display" style="color:#0f0; font-size:13px;">0%</span>
+</div>
+
+<div class="export-area">
+  <button class="btn btn-export" onclick="exportAll()">EXPORT TO GAME</button>
+  <button class="btn btn-copy" onclick="importPatterns()" style="margin-left:10px;">IMPORT</button>
+  <div class="export-status" id="export-status"></div>
+  <textarea id="export-json" placeholder="Patterns JSON will appear here..."></textarea>
+</div>
+
+<div class="instructions">
+  <strong>Comment ca marche:</strong><br>
+  1. Clique sur les cellules pour placer/enlever des notes<br>
+  2. Utilise PLAY pour ecouter ton pattern en boucle<br>
+  3. Change de wave pour composer les 10 musiques<br>
+  4. Clique EXPORT TO GAME quand t'es content<br>
+  5. Copie le JSON et colle-le dans le jeu (ou clique Export pour sauver auto)<br><br>
+  <strong>Tips:</strong> Le kick sur 1, snare sur 5 et 13 = groove DnB classique. Crash sur le 1 de chaque pattern. Mets des hihats partout pour l'energie!
+</div>
+
+<script>
+// ============================================================
+// INSTRUMENTS
+// ============================================================
+const INSTRUMENTS = [
+  { id: 'crash',    name: 'CRASH',     color: '#ff0' },
+  { id: 'ride',     name: 'RIDE',      color: '#af0' },
+  { id: 'open-hat', name: 'OPEN HAT',  color: '#08f' },
+  { id: 'hihat',    name: 'HI-HAT',    color: '#0cf' },
+  { id: 'snare',    name: 'SNARE',     color: '#f90' },
+  { id: 'kick',     name: 'KICK',      color: '#e53' },
+  { id: 'sub',      name: 'SUB BASS',  color: '#c0f' },
+  { id: 'reese',    name: 'REESE',     color: '#f0a' },
+  { id: 'strings',  name: 'STRINGS',   color: '#d8a' },
+  { id: 'bell',     name: 'BELL',      color: '#8df' },
+];
+
+const STEPS = 16;
+const TOTAL_WAVES = 10;
+
+// ============================================================
+// PATTERNS STORAGE
+// ============================================================
+// patterns[waveIdx] = { bpm, swing, grid: { instId: [0/1 x 16] } }
+let patterns = [];
+let currentWave = 0;
+
+function initPatterns() {
+  for (let w = 0; w < TOTAL_WAVES; w++) {
+    const grid = {};
+    INSTRUMENTS.forEach(inst => { grid[inst.id] = new Array(STEPS).fill(0); });
+
+    // Default DnB starter pattern
+    grid['kick'][0] = 1;
+    grid['kick'][10] = 1;
+    grid['snare'][4] = 1;
+    grid['snare'][12] = 1;
+    grid['hihat'] = [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0];
+    grid['crash'][0] = 1;
+
+    patterns.push({ bpm: 174, swing: 0, grid });
+  }
+}
+
+// ============================================================
+// UI - GRID
+// ============================================================
+const gridEl = document.getElementById('grid');
+const waveSelect = document.getElementById('wave-select');
+const bpmSlider = document.getElementById('bpm-slider');
+const bpmDisplay = document.getElementById('bpm-display');
+const swingSlider = document.getElementById('swing-slider');
+const swingDisplay = document.getElementById('swing-display');
+
+function buildWaveSelect() {
+  for (let i = 0; i < TOTAL_WAVES; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `Wave ${i + 1} - ${getWeaponName(i)}`;
+    waveSelect.appendChild(opt);
+  }
+  waveSelect.addEventListener('change', () => {
+    saveCurrentUI();
+    currentWave = parseInt(waveSelect.value);
+    loadWave(currentWave);
+  });
+}
+
+const WEAPON_NAMES = [
+  'SHOTGUN', 'BAZOOKA', 'RICOCHET PISTOL', 'RAIL GUN', 'GRENADE LAUNCHER',
+  'MINIGUN', 'FREEZE RAY', 'CHAIN LIGHTNING', 'BLACK HOLE GUN', 'GOLDEN SHOTGUN'
+];
+function getWeaponName(idx) { return WEAPON_NAMES[idx] || '???'; }
+
+function buildGrid() {
+  gridEl.innerHTML = '';
+
+  // Step numbers row
+  const numRow = document.createElement('tr');
+  numRow.className = 'step-nums';
+  numRow.innerHTML = '<td></td>';
+  for (let s = 0; s < STEPS; s++) {
+    const td = document.createElement('td');
+    td.textContent = s + 1;
+    td.className = s % 4 === 0 ? 'beat-one' : '';
+    numRow.appendChild(td);
+  }
+  gridEl.appendChild(numRow);
+
+  // Instrument rows
+  INSTRUMENTS.forEach(inst => {
+    const tr = document.createElement('tr');
+
+    const th = document.createElement('th');
+    th.innerHTML = `<span class="inst-color" style="background:${inst.color}"></span>${inst.name}`;
+    tr.appendChild(th);
+
+    for (let s = 0; s < STEPS; s++) {
+      const td = document.createElement('td');
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.inst = inst.id;
+      cell.dataset.step = s;
+      if (s % 4 === 0) cell.classList.add('beat-start');
+
+      cell.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        toggleCell(inst.id, s, cell);
+        isDragging = true;
+        dragValue = cell.classList.contains('on') ? 1 : 0;
+      });
+      cell.addEventListener('mouseenter', () => {
+        if (isDragging) {
+          const p = patterns[currentWave].grid[inst.id];
+          p[s] = dragValue;
+          cell.classList.toggle('on', dragValue === 1);
+          if (dragValue) cell.classList.add(inst.id);
+          else cell.classList.remove(inst.id);
+        }
+      });
+
+      td.appendChild(cell);
+      tr.appendChild(td);
+    }
+    gridEl.appendChild(tr);
+  });
+}
+
+let isDragging = false;
+let dragValue = 0;
+document.addEventListener('mouseup', () => { isDragging = false; });
+
+function toggleCell(instId, step, cellEl) {
+  const p = patterns[currentWave].grid[instId];
+  p[step] = p[step] ? 0 : 1;
+  cellEl.classList.toggle('on', p[step] === 1);
+  if (p[step]) cellEl.classList.add(instId);
+  else cellEl.classList.remove(instId);
+}
+
+function loadWave(waveIdx) {
+  const pat = patterns[waveIdx];
+  bpmSlider.value = pat.bpm;
+  bpmDisplay.textContent = pat.bpm;
+  swingSlider.value = pat.swing;
+  swingDisplay.textContent = pat.swing + '%';
+
+  // Update grid cells
+  const cells = gridEl.querySelectorAll('.cell');
+  cells.forEach(cell => {
+    const inst = cell.dataset.inst;
+    const step = parseInt(cell.dataset.step);
+    const on = pat.grid[inst][step];
+    cell.classList.toggle('on', on === 1);
+    INSTRUMENTS.forEach(i => cell.classList.remove(i.id));
+    if (on) cell.classList.add(inst);
+    cell.classList.remove('playhead');
+  });
+}
+
+function saveCurrentUI() {
+  patterns[currentWave].bpm = parseInt(bpmSlider.value);
+  patterns[currentWave].swing = parseInt(swingSlider.value);
+}
+
+bpmSlider.addEventListener('input', () => {
+  bpmDisplay.textContent = bpmSlider.value;
+  patterns[currentWave].bpm = parseInt(bpmSlider.value);
+});
+swingSlider.addEventListener('input', () => {
+  swingDisplay.textContent = swingSlider.value + '%';
+  patterns[currentWave].swing = parseInt(swingSlider.value);
+});
+
+// ============================================================
+// ACTIONS
+// ============================================================
+function clearPattern() {
+  INSTRUMENTS.forEach(inst => {
+    patterns[currentWave].grid[inst.id] = new Array(STEPS).fill(0);
+  });
+  loadWave(currentWave);
+}
+
+function copyToAll() {
+  const src = JSON.parse(JSON.stringify(patterns[currentWave]));
+  for (let i = 0; i < TOTAL_WAVES; i++) {
+    if (i !== currentWave) patterns[i] = JSON.parse(JSON.stringify(src));
+  }
+  showStatus('Pattern copied to all 10 waves!');
+}
+
+function copyToNext() {
+  if (currentWave < TOTAL_WAVES - 1) {
+    patterns[currentWave + 1] = JSON.parse(JSON.stringify(patterns[currentWave]));
+    showStatus(`Copied to Wave ${currentWave + 2}`);
+  }
+}
+
+// ============================================================
+// AUDIO ENGINE
+// ============================================================
+let audioCtx;
+let playing = false;
+let currentStep = -1;
+let nextStepTime = 0;
+let timerID = null;
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function togglePlay() {
+  if (playing) { stopPlay(); return; }
+  ensureAudio();
+  playing = true;
+  currentStep = -1;
+  nextStepTime = audioCtx.currentTime + 0.05;
+  document.getElementById('btn-play').textContent = 'PAUSE';
+  document.getElementById('btn-play').classList.add('playing');
+  scheduler();
+}
+
+function stopPlay() {
+  playing = false;
+  if (timerID) { clearTimeout(timerID); timerID = null; }
+  document.getElementById('btn-play').textContent = 'PLAY';
+  document.getElementById('btn-play').classList.remove('playing');
+  // Clear playhead
+  gridEl.querySelectorAll('.playhead').forEach(c => c.classList.remove('playhead'));
+  currentStep = -1;
+}
+
+function scheduler() {
+  if (!playing) return;
+  const pat = patterns[currentWave];
+  const sixteenth = 60 / pat.bpm / 4;
+
+  while (nextStepTime < audioCtx.currentTime + 0.1) {
+    currentStep = (currentStep + 1) % STEPS;
+
+    // Swing: delay odd steps
+    let swingOffset = 0;
+    if (currentStep % 2 === 1 && pat.swing > 0) {
+      swingOffset = sixteenth * (pat.swing / 100) * 0.5;
+    }
+
+    const time = nextStepTime + swingOffset;
+    playStep(currentStep, time, pat);
+
+    // Visual update
+    const step = currentStep;
+    setTimeout(() => updatePlayhead(step), (time - audioCtx.currentTime) * 1000);
+
+    nextStepTime += sixteenth;
+  }
+  timerID = setTimeout(scheduler, 25);
+}
+
+function updatePlayhead(step) {
+  gridEl.querySelectorAll('.playhead').forEach(c => c.classList.remove('playhead'));
+  gridEl.querySelectorAll(`.cell[data-step="${step}"]`).forEach(c => c.classList.add('playhead'));
+}
+
+function playStep(step, time, pat) {
+  const g = pat.grid;
+
+  if (g['kick'][step])     playKick(time);
+  if (g['snare'][step])    playSnare(time);
+  if (g['hihat'][step])    playHihat(time);
+  if (g['open-hat'][step]) playOpenHat(time);
+  if (g['crash'][step])    playCrash(time);
+  if (g['ride'][step])     playRide(time);
+  if (g['sub'][step])      playSub(time, step);
+  if (g['reese'][step])    playReese(time, step);
+  if (g['strings'][step])  playStrings(time, step);
+  if (g['bell'][step])     playBell(time, step);
+}
+
+// --- Drum sounds ---
+function playKick(t) {
+  const o = audioCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(200, t);
+  o.frequency.exponentialRampToValueAtTime(30, t + 0.2);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(1.0, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.3);
+
+  // Click
+  const o2 = audioCtx.createOscillator();
+  o2.type = 'triangle';
+  o2.frequency.setValueAtTime(4000, t);
+  o2.frequency.exponentialRampToValueAtTime(100, t + 0.015);
+  const g2 = audioCtx.createGain();
+  g2.gain.setValueAtTime(0.5, t);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
+  o2.connect(g2).connect(audioCtx.destination);
+  o2.start(t); o2.stop(t + 0.03);
+}
+
+function playSnare(t) {
+  // Noise
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.12, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 1.5);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.6, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 3500; bp.Q.value = 1;
+  src.connect(bp).connect(g).connect(audioCtx.destination);
+  src.start(t);
+
+  // Body
+  const o = audioCtx.createOscillator();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(250, t);
+  o.frequency.exponentialRampToValueAtTime(100, t + 0.04);
+  const g2 = audioCtx.createGain();
+  g2.gain.setValueAtTime(0.5, t);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  o.connect(g2).connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.06);
+}
+
+function playHihat(t) {
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.02, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 6);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.25, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 9000;
+  src.connect(hp).connect(g).connect(audioCtx.destination);
+  src.start(t);
+}
+
+function playOpenHat(t) {
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.12, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 2);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.25, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 7000;
+  src.connect(hp).connect(g).connect(audioCtx.destination);
+  src.start(t);
+}
+
+function playCrash(t) {
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.5, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 1.2);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.35, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 5000;
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 14000;
+  src.connect(hp).connect(lp).connect(g).connect(audioCtx.destination);
+  src.start(t);
+}
+
+function playRide(t) {
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 3);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.15, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 11000;
+  src.connect(hp).connect(g).connect(audioCtx.destination);
+  src.start(t);
+
+  // Bell tone
+  const o = audioCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.value = 3500;
+  const g2 = audioCtx.createGain();
+  g2.gain.setValueAtTime(0.04, t);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+  o.connect(g2).connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.07);
+}
+
+const SUB_NOTES = [36, 34, 32, 38]; // C, Bb, Ab, D
+function playSub(t, step) {
+  const freq = SUB_NOTES[Math.floor(step / 4) % SUB_NOTES.length];
+  const o = audioCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(freq, t);
+  const sixteenth = 60 / patterns[currentWave].bpm / 4;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.5, t);
+  g.gain.setValueAtTime(0.5, t + sixteenth * 0.8);
+  g.gain.exponentialRampToValueAtTime(0.001, t + sixteenth * 0.95);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t); o.stop(t + sixteenth);
+}
+
+const REESE_NOTES = [55, 52, 49, 58];
+function playReese(t, step) {
+  const freq = REESE_NOTES[Math.floor(step / 4) % REESE_NOTES.length];
+  const sixteenth = 60 / patterns[currentWave].bpm / 4;
+  [-4, 4].forEach(detune => {
+    const o = audioCtx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(freq, t);
+    o.detune.value = detune;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.1, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + sixteenth * 0.9);
+    const lp = audioCtx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(600, t);
+    lp.frequency.exponentialRampToValueAtTime(100, t + sixteenth * 0.9);
+    lp.Q.value = 5;
+    o.connect(lp).connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + sixteenth);
+  });
+}
+
+const STRING_NOTES = [220, 196, 175, 233]; // A3, G3, F3, Bb3
+function playStrings(t, step) {
+  const freq = STRING_NOTES[Math.floor(step / 4) % STRING_NOTES.length];
+  const sixteenth = 60 / patterns[currentWave].bpm / 4;
+  const dur = sixteenth * 2;
+  // Layer multiple detuned sines for violin-like strings
+  [0, 3, -3, 7, -7].forEach(detune => {
+    const o = audioCtx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(freq, t);
+    o.detune.value = detune;
+    // Vibrato
+    const lfo = audioCtx.createOscillator();
+    lfo.frequency.value = 5;
+    const lfoGain = audioCtx.createGain();
+    lfoGain.gain.value = 4;
+    lfo.connect(lfoGain).connect(o.frequency);
+    lfo.start(t); lfo.stop(t + dur);
+    // Envelope: slow attack, sustain, release
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(0.04, t + dur * 0.3);
+    g.gain.linearRampToValueAtTime(0.03, t + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    // Warm filter
+    const lp = audioCtx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2000;
+    lp.Q.value = 1;
+    o.connect(lp).connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + dur + 0.01);
+  });
+}
+
+const BELL_NOTES = [523, 659, 784, 523]; // C5, E5, G5, C5
+function playBell(t, step) {
+  const freq = BELL_NOTES[Math.floor(step / 4) % BELL_NOTES.length];
+  const sixteenth = 60 / patterns[currentWave].bpm / 4;
+  // Pure sine bell with harmonics
+  [1, 2.4, 4.1].forEach((harmonic, idx) => {
+    const o = audioCtx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(freq * harmonic, t);
+    const g = audioCtx.createGain();
+    const vol = 0.08 / (idx + 1);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + sixteenth * 3);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + sixteenth * 3 + 0.01);
+  });
+}
+
+// ============================================================
+// EXPORT / IMPORT
+// ============================================================
+function exportAll() {
+  saveCurrentUI();
+  const data = patterns.map((p, i) => ({
+    wave: i + 1,
+    weapon: WEAPON_NAMES[i],
+    bpm: p.bpm,
+    swing: p.swing,
+    grid: p.grid,
+  }));
+  const json = JSON.stringify(data, null, 2);
+  document.getElementById('export-json').value = json;
+
+  // Also save to localStorage for the game to pick up
+  localStorage.setItem('chickengun_patterns', json);
+  showStatus('Exported! Patterns saved - the game will load them automatically.');
+}
+
+function importPatterns() {
+  const json = document.getElementById('export-json').value.trim();
+  if (!json) { showStatus('Paste JSON first!'); return; }
+  try {
+    const data = JSON.parse(json);
+    data.forEach((p, i) => {
+      if (i < TOTAL_WAVES) {
+        patterns[i].bpm = p.bpm || 174;
+        patterns[i].swing = p.swing || 0;
+        patterns[i].grid = p.grid;
+      }
+    });
+    loadWave(currentWave);
+    showStatus('Imported ' + data.length + ' patterns!');
+  } catch(e) {
+    showStatus('Invalid JSON: ' + e.message);
+  }
+}
+
+function showStatus(msg) {
+  const el = document.getElementById('export-status');
+  el.textContent = msg;
+  setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
+}
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'TEXTAREA') return;
+  if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+  if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    const next = Math.min(currentWave + 1, TOTAL_WAVES - 1);
+    waveSelect.value = next;
+    waveSelect.dispatchEvent(new Event('change'));
+  }
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    const prev = Math.max(currentWave - 1, 0);
+    waveSelect.value = prev;
+    waveSelect.dispatchEvent(new Event('change'));
+  }
+});
+
+// ============================================================
+// INIT
+// ============================================================
+initPatterns();
+
+// Try loading saved patterns
+try {
+  const saved = localStorage.getItem('chickengun_patterns');
+  if (saved) {
+    const data = JSON.parse(saved);
+    data.forEach((p, i) => {
+      if (i < TOTAL_WAVES && p.grid) {
+        patterns[i].bpm = p.bpm || 174;
+        patterns[i].swing = p.swing || 0;
+        patterns[i].grid = p.grid;
+      }
+    });
+  }
+} catch(e) {}
+
+buildWaveSelect();
+buildGrid();
+loadWave(0);
+</script>
+</body>
+</html>
