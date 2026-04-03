@@ -2390,6 +2390,20 @@ function update() {
     return;
   }
 
+  // Platformer mode takes over
+  if (platState) {
+    updatePlatformer(dt);
+    // Damage flash (shared)
+    if (damageFlashTimer > 0) {
+      damageFlashTimer -= dt;
+      damageFlash.style.opacity = damageFlashTimer * 5;
+    } else {
+      damageFlash.style.opacity = 0;
+    }
+    requestAnimationFrame(update);
+    return;
+  }
+
   if (!state.alive) {
     renderer.render(scene, camera);
     requestAnimationFrame(update);
@@ -2476,8 +2490,14 @@ function update() {
           // Zone transition cinematic!
           state.waveActive = false;
           startCinematic(ZONES[prevZoneIdx].id, nextZone.id, () => {
-            // After cinematic, start first wave of new zone
-            state.waveTimer = 0;
+            // After cinematic, start the right game mode for the new zone
+            if (nextZone.id === 'forest') {
+              // Zone 2 = Platformer!
+              clearArena();
+              startPlatformer();
+            } else {
+              state.waveTimer = 0;
+            }
           });
         }
       }
@@ -3277,6 +3297,24 @@ function devGoToWave(wave) {
 }
 
 function devSelectAction(val) {
+  if (val === 'platformer') {
+    // Jump straight into platformer
+    clearArena();
+    cinematicState = null;
+    if (platState) cleanupPlatformer();
+    introState = 'done';
+    introOverlay.classList.add('hidden');
+    state.wave = 6;
+    state.alive = true;
+    state.lives = MAX_LIVES;
+    state.health = 100;
+    pig.position.set(0, 0, 0);
+    pigVel.set(0, 0, 0);
+    startPlatformer();
+    updateLivesDisplay();
+    document.getElementById('level-select').selectedIndex = 0;
+    return;
+  }
   if (val === 'cinematic') {
     clearArena();
     state.wave = 5;
