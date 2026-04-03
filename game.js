@@ -3297,9 +3297,189 @@ function devSelectAction(val) {
 }
 
 // ============================================================
+// INTRO CINEMATIC
+// ============================================================
+let introState = 'title'; // title, cinematic, done
+let introTimer = 0;
+let introScene = null; // temp 3D objects for intro
+
+const introOverlay = document.getElementById('intro-overlay');
+const introText = document.getElementById('intro-text');
+
+function startIntroCinematic() {
+  introState = 'cinematic';
+  introTimer = 0;
+  introOverlay.classList.add('fade-out');
+
+  // Build a mini exterior scene: barn from outside + moon
+  buildZone('barn');
+  createPig();
+
+  // Place pig inside the barn near the back
+  pig.position.set(0, 0, 2);
+  pig.rotation.y = Math.PI;
+  pigVel.set(0, 0, 0);
+
+  // Add moon
+  const moon = new THREE.Mesh(
+    new THREE.SphereGeometry(2, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffffcc })
+  );
+  moon.position.set(10, 20, -30);
+  scene.add(moon);
+  introScene = { moon };
+
+  // Dark night lighting
+  scene.background = new THREE.Color(0x050510);
+  scene.fog = new THREE.FogExp2(0x050510, 0.01);
+  ambientLight.color.setHex(0x334466);
+  ambientLight.intensity = 0.2;
+  dirLight.color.setHex(0x8899bb);
+  dirLight.intensity = 0.3;
+
+  // Moonlight
+  const moonLight = new THREE.PointLight(0xccccff, 0.5, 60);
+  moonLight.position.set(10, 15, -20);
+  scene.add(moonLight);
+  introScene.moonLight = moonLight;
+
+  // "ABATTOIR - TOMORROW 6AM" sign on wall
+  // (visual: a red-ish flat box on the barn wall)
+  const signMat = new THREE.MeshBasicMaterial({ color: 0xffcccc });
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 0.05), signMat);
+  sign.position.set(3, 3, arenaD / 2 - 0.3);
+  arenaGroup.add(sign);
+  // Red text on sign (dark box for text lines)
+  const textMat = new THREE.MeshBasicMaterial({ color: 0xcc0000 });
+  const line1 = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 0.06), textMat);
+  line1.position.set(3, 3.3, arenaD / 2 - 0.27);
+  arenaGroup.add(line1);
+  const line2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.06), textMat);
+  line2.position.set(3, 2.9, arenaD / 2 - 0.27);
+  arenaGroup.add(line2);
+  const line3 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 0.06), textMat);
+  line3.position.set(3, 2.6, arenaD / 2 - 0.27);
+  arenaGroup.add(line3);
+
+  state.alive = false; // Don't allow gameplay during intro
+}
+
+function updateIntro(dt) {
+  if (introState === 'title') return false;
+  if (introState === 'done') return false;
+
+  introTimer += dt;
+  const t = introTimer;
+
+  // Animate pig slightly
+  pig.userData.runPhase += dt * 2;
+
+  // Phase 0 (0-3s): Camera outside barn, night, zoom toward window
+  if (t < 3) {
+    const p = t / 3;
+    camera.position.set(
+      -8 + p * 5,
+      4 + p * 2,
+      arenaD / 2 + 8 - p * 5
+    );
+    camera.lookAt(0, 3, arenaD / 2);
+  }
+  // Phase 1 (3-5s): Camera enters barn, sees pig looking at sign
+  else if (t < 5) {
+    const p = (t - 3) / 2;
+    camera.position.lerp(new THREE.Vector3(2, 2.5, 5), dt * 3);
+    camera.lookAt(pig.position.x, 1.5, pig.position.z + 2);
+    // Pig looks at sign
+    pig.rotation.y = Math.PI * 0.7;
+  }
+  // Phase 2 (5-7s): Close-up on pig's face, he looks angry
+  else if (t < 7) {
+    const p = (t - 5) / 2;
+    camera.position.lerp(new THREE.Vector3(0, 1.6, 4), dt * 4);
+    camera.lookAt(pig.position.x, 1.4, pig.position.z);
+    pig.rotation.y = Math.PI + p * 0.3;
+  }
+  // Phase 3 (7-9s): Pig turns toward the shotgun (gun on wall), camera follows
+  else if (t < 9) {
+    const p = (t - 7) / 2;
+    pig.rotation.y = Math.PI + 0.3 - p * (Math.PI + 0.3); // Turn to face forward
+    camera.position.lerp(new THREE.Vector3(-1, 2, 3.5), dt * 3);
+    camera.lookAt(pig.position.x, 1.2, pig.position.z);
+  }
+  // Phase 4 (9-10.5s): Close-up determined face, builds gun
+  else if (t < 10.5) {
+    camera.position.lerp(new THREE.Vector3(0, 1.6, 2.5), dt * 5);
+    camera.lookAt(pig.position.x, 1.3, pig.position.z);
+    buildGunModel();
+  }
+  // Phase 5 (10.5-11.5s): White flash → game starts
+  else if (t < 11.5) {
+    if (!introScene.flashed) {
+      introScene.flashed = true;
+      playSound('shotgun');
+      // Flash
+      scene.background = new THREE.Color(0xffffff);
+      setTimeout(() => {
+        // Restore barn lighting
+        const zone = ZONES[0];
+        applyZoneLighting(zone);
+      }, 200);
+    }
+    camera.position.lerp(new THREE.Vector3(0, 28, 8), dt * 5);
+    camera.lookAt(0, 0, 0);
+  }
+  // Done
+  else {
+    // Clean up intro objects
+    if (introScene.moon) scene.remove(introScene.moon);
+    if (introScene.moonLight) scene.remove(introScene.moonLight);
+    introScene = null;
+
+    // Restore game state
+    introOverlay.classList.add('hidden');
+    applyZoneLighting(ZONES[0]);
+    pig.position.set(0, 0, 0);
+    pig.rotation.y = 0;
+    pigVel.set(0, 0, 0);
+    state.alive = true;
+    state.waveTimer = 0;
+    introState = 'done';
+    updateLivesDisplay();
+    return false;
+  }
+
+  renderer.render(scene, camera);
+  return true;
+}
+
+// Click to start
+introOverlay.addEventListener('click', () => {
+  if (introState === 'title') {
+    startIntroCinematic();
+  }
+});
+
+// ============================================================
 // INIT
 // ============================================================
-buildZone('barn');
-createPig();
-updateLivesDisplay();
-requestAnimationFrame(update);
+// Don't build anything yet - wait for intro click
+requestAnimationFrame(function introLoop() {
+  const now = performance.now();
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+
+  if (introState === 'title') {
+    // Just render black, waiting for click
+    renderer.render(scene, camera);
+    requestAnimationFrame(introLoop);
+  } else if (introState === 'cinematic') {
+    if (updateIntro(dt)) {
+      requestAnimationFrame(introLoop);
+    } else {
+      // Intro done, start game loop
+      requestAnimationFrame(update);
+    }
+  } else {
+    requestAnimationFrame(update);
+  }
+});

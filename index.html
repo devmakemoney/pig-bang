@@ -139,6 +139,43 @@
   #power-name {
     color: #888; font-size: 11px; text-shadow: 1px 1px 2px #000;
   }
+  @import url('https://fonts.googleapis.com/css2?family=Bungee+Shade&family=Special+Elite&display=swap');
+
+  #intro-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #000; z-index: 200;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; transition: opacity 0.8s;
+  }
+  #intro-overlay.fade-out { opacity: 0; pointer-events: none; }
+  #intro-overlay.hidden { display: none; }
+  #intro-title { text-align: center; opacity: 0; animation: introFadeIn 2s 0.5s forwards; }
+  #intro-pig-bang {
+    font-family: 'Bungee Shade', cursive;
+    font-size: 90px; color: #ff6b6b;
+    text-shadow: 4px 4px 0 #8B0000, 8px 8px 0 rgba(0,0,0,0.3);
+    letter-spacing: 6px;
+  }
+  #intro-subtitle {
+    font-family: 'Special Elite', cursive;
+    font-size: 32px; color: #ffcc66; margin-top: -5px;
+    letter-spacing: 8px; text-transform: uppercase;
+    text-shadow: 2px 2px 4px #000;
+  }
+  #intro-text {
+    font-family: 'Special Elite', cursive;
+    font-size: 18px; color: #aaa; margin-top: 30px;
+    text-align: center; line-height: 1.8;
+    opacity: 0; animation: introFadeIn 2s 2s forwards;
+    max-width: 500px;
+  }
+  #intro-click {
+    font-family: 'Courier New', monospace;
+    font-size: 18px; color: #ff0; margin-top: 40px;
+    animation: blink 1.2s infinite, introFadeIn 1s 3.5s forwards;
+    opacity: 0;
+  }
+  @keyframes introFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   #dev-panel {
     position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
     z-index: 100;
@@ -202,6 +239,15 @@
   <h1>GAME OVER</h1>
   <div class="final-score">Score: 0</div>
   <div class="restart" onclick="restartGame()">Click to restart</div>
+</div>
+
+<div id="intro-overlay">
+  <div id="intro-title">
+    <div id="intro-pig-bang">PIG BANG</div>
+    <div id="intro-subtitle">The Great Escape</div>
+  </div>
+  <div id="intro-text"></div>
+  <div id="intro-click">Click to start</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
